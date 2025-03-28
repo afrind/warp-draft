@@ -706,7 +706,7 @@ Given sufficient out of band information, it is valid for a subscriber
 to send a SUBSCRIBE or FETCH message to a publisher (including a relay) without
 any previous MoQT messages besides SETUP. However, SUBSCRIBE_ANNOUNCES and
 ANNOUNCE messages provide an in-band means of discovery of publishers for a
-namespace.
+namespace or track.
 
 The syntax of these messages is described in {{message}}.
 
@@ -733,24 +733,22 @@ not prohibit the receiver (publisher) from sending further ANNOUNCE messages.
 ## Announcements
 
 A publisher MAY send ANNOUNCE messages to any subscriber. An ANNOUNCE indicates
-to the subscriber that the publisher has tracks available in that namespace. A
-subscriber MAY send SUBSCRIBE or FETCH for a namespace without having received
-an ANNOUNCE for it.
+to the subscriber that the publisher has a single track available, or one or 
+more tracks available in a namespace. A subscriber MAY send SUBSCRIBE or FETCH
+for a track without having received an ANNOUNCE for it.
 
-If a publisher is authoritative for a given namespace, or is a relay that has
+If a publisher is authoritative for a given track or namespace, or is a relay that has
 received an authorized ANNOUNCE for that namespace from an upstream publisher,
 it MUST send an ANNOUNCE to any subscriber that has subscribed to ANNOUNCE for
 that namespace, or a more generic set including that namespace. A publisher MAY
 send the ANNOUNCE to any other subscriber.
 
-An endpoint SHOULD NOT, however, send an ANNOUNCE advertising a namespace that
-exactly matches a namespace for which the peer sent an earlier ANNOUNCE
+An endpoint SHOULD NOT, however, send an ANNOUNCE advertising a namespace or track
+that exactly matches a namespace for which the peer sent an earlier ANNOUNCE
 (i.e. an ANNOUNCE ought not to be echoed back to its sender).
 
 The receiver of an ANNOUNCE_OK or ANNOUNCE_ERROR SHOULD report this to the
-application to inform the search for additional subscribers for a namespace,
-or abandoning the attempt to publish under this namespace. This might be
-especially useful in upload or chat applications. A subscriber MUST send exactly
+application. A subscriber MUST send exactly
 one ANNOUNCE_OK or ANNOUNCE_ERROR in response to an ANNOUNCE. The publisher
 SHOULD close the session with a protocol error if it receives more than one.
 
@@ -769,9 +767,9 @@ other phenomena. In particular, ANNOUNCE SHOULD NOT be used to find paths throug
 richly connected networks of relays.
 
 A subscriber MAY send a SUBSCRIBE or FETCH for a track to any publisher. If it
-has accepted an ANNOUNCE with a namespace that exactly matches the namespace for
-that track, it SHOULD only request it from the senders of those ANNOUNCE
-messages.
+has accepted an ANNOUNCE for that track, or with a namespace that exactly matches
+the namespace for that track, it SHOULD only request it from the senders of those
+ANNOUNCE messages.
 
 
 # Priorities {#priorities}
@@ -939,40 +937,40 @@ to the old relay can be stopped with an UNSUBSCRIBE.
 ## Publisher Interactions
 
 Publishing through the relay starts with publisher sending ANNOUNCE
-control message with a `Track Namespace` ({{model-track}}).
+control message with a `Track Namespace` ({{model-track}}) and optional
+`Track Name`.
 The ANNOUNCE enables the relay to know which publisher to forward a
 SUBSCRIBE to.
 
 Relays MUST verify that publishers are authorized to publish
 the content associated with the set of
-tracks whose Track Namespace matches the announced namespace. Where the
+tracks whose Track Namespace or Track Name matches the ANNOUNCE. Where the
 authorization and identification of the publisher occurs depends on the way the
 relay is managed and is application specific.
 
 A Relay can receive announcements from multiple publishers for the same
 Track Namespace and it SHOULD respond with the same response to each of the
-publishers, as though it was responding to an ANNOUNCE
-from a single publisher for a given track namespace.
+publishers, as though it was responding to an ANNOUNCE from a single publisher.
 
-When a publisher wants to stop new subscriptions for an announced namespace it
-sends an UNANNOUNCE. A subscriber indicates it will no longer subcribe to tracks
-in a namespace it previously responded ANNOUNCE_OK to by sending an
-ANNOUNCE_CANCEL.
+When a publisher wants to stop new subscriptions for an announced namespace or
+track, it sends an UNANNOUNCE. A subscriber indicates it will no longer subscribe
+to tracks matching a ANNOUNCE message it previously responded ANNOUNCE_OK to by
+sending an ANNOUNCE_CANCEL.
 
 A relay manages sessions from multiple publishers and subscribers,
-connecting them based on the track namespace. This MUST use an exact
-match on track namespace unless otherwise negotiated by the application.
+connecting them based on the track namespace or full track name. This MUST use
+an exact match on track namespace unless otherwise negotiated by the application.
 For example, a SUBSCRIBE namespace=foobar message will be forwarded to
 the session that sent ANNOUNCE namespace=foobar.
 
 When a relay receives an incoming SUBSCRIBE request that triggers an
 upstream subscription, it SHOULD send a SUBSCRIBE request to each
-publisher that has announced the subscription's namespace, unless it
-already has an active subscription for the Objects requested by the
+publisher that has announced the subscription's namespace or full track name,
+unless it already has an active subscription for the Objects requested by the
 incoming SUBSCRIBE request from all available publishers.
 
-When a relay receives an incoming ANNOUNCE for a given namespace, for
-each active upstream subscription that matches that namespace, it SHOULD send a
+When a relay receives an incoming ANNOUNCE for a given namespace or track, for
+each active upstream subscription that matches that namespace or track, it SHOULD send a
 SUBSCRIBE to the publisher that sent the ANNOUNCE.
 
 If a relay receives a Publisher-Chosen Subscription ID in SUBSCRIBE_OK, it
@@ -2150,6 +2148,8 @@ ANNOUNCE Message {
   Type (i) = 0x6,
   Length (i),
   Track Namespace (tuple),
+  Track Name Length (i),
+  Track Name (..),
   Number of Parameters (i),
   Parameters (..) ...,
 }
@@ -2159,7 +2159,11 @@ ANNOUNCE Message {
 * Track Namespace: Identifies a track's namespace as defined in
 ({{track-name}})
 
+* Track Name: Identifies the track name as defined in ({{track-name}}).  This
+  field MAY be empty.
+
 * Parameters: The parameters are defined in {{version-specific-params}}.
+
 
 ## ANNOUNCE_OK {#message-announce-ok}
 
@@ -2172,12 +2176,21 @@ ANNOUNCE_OK Message
   Type (i) = 0x7,
   Length (i),
   Track Namespace (tuple),
+  Track Name Length (i),
+  Track Name (..),
+  Number of Parameters (i),
+  Parameters (..) ...,
 }
 ~~~
 {: #moq-transport-announce-ok format title="MOQT ANNOUNCE_OK Message"}
 
 * Track Namespace: Identifies the track namespace in the ANNOUNCE
 message for which this response is provided.
+
+* Track Name: Identifies the track name in the ANNOUNCE message
+  for which this response is provided.  This field MAY be empty.
+
+* Parameters: Parameters associated with this message.
 
 ## ANNOUNCE_ERROR {#message-announce-error}
 
@@ -2190,6 +2203,8 @@ ANNOUNCE_ERROR Message
   Type (i) = 0x8,
   Length (i),
   Track Namespace (tuple),
+  Track Name Length (i),
+  Track Name (..),
   Error Code (i),
   Reason Phrase Length (i),
   Reason Phrase (..),
@@ -2199,6 +2214,9 @@ ANNOUNCE_ERROR Message
 
 * Track Namespace: Identifies the track namespace in the ANNOUNCE
 message for which this response is provided.
+
+* Track Name: Identifies the track name in the ANNOUNCE message
+  for which this response is provided.  This field MAY be empty.
 
 * Error Code: Identifies an integer error code for announcement failure.
 
