@@ -977,10 +977,11 @@ SUBSCRIBE to the publisher that sent the ANNOUNCE.
 
 If a relay receives a Publisher-Chosen Subscription ID in SUBSCRIBE_OK, it
 SHOULD assign this ID to downstream subscriptions for the same track. Since
-relays can aggregate tracks from uncoordinated publishers, it is not always
+subscribers can request tracks from uncoordinated publishers through a single
+relay session, it is not always
 possible to reuse the upstream PSID.  If there is no upstream
 Publisher-Chosen Subscription ID, or if the upstream PSID is already in use
-downstream for a different track, the relay SHOULD NOT set a 
+downstream for a different track, the relay SHOULD NOT set a
 Publisher-Chosen Subscription ID, and use the Subscriber-Chosen
 Subscription ID instead.
 
@@ -1387,7 +1388,8 @@ SUBSCRIPTIONS_BLOCKED
 ~~~
 {: #moq-transport-subscribes-blocked format title="MOQT SUBSCRIPTIONS_BLOCKED Message"}
 
-* Maximum Subscription ID: The Maximum Subscription ID for the session on which the subscriber
+* Maximum Subscription ID: The Maximum Subscriber-Chosen Subscription ID for the
+session on which the subscriber
 is blocked. More on Subscription ID in {{message-subscribe-req}}.
 
 ## SUBSCRIBE {#message-subscribe-req}
@@ -1964,7 +1966,8 @@ FETCH_OK
 ~~~
 {: #moq-transport-fetch-ok format title="MOQT FETCH_OK Message"}
 
-* Subscription ID: Fetch Identifier as defined in {{message-fetch}}.
+* Subscription ID: Subscriber-Chosen Subscription Identifier as defined in
+  {{message-fetch}}.
 
 * Group Order: Indicates the fetch will be delivered in
 Ascending (0x1) or Descending (0x2) order by group. See {{priorities}}.
@@ -2002,7 +2005,8 @@ FETCH_ERROR
 ~~~
 {: #moq-transport-fetch-error format title="MOQT FETCH_ERROR Message"}
 
-* Subscription ID: Subscription Identifier as defined in {{message-fetch}}.
+* Subscription ID: Subscriber-Chosen Subscription Identifier as defined in
+  {{message-fetch}}.
 
 * Error Code: Identifies an integer error code for fetch failure.
 
@@ -2065,7 +2069,8 @@ FETCH_CANCEL Message {
 ~~~
 {: #moq-transport-fetch-cancel title="MOQT FETCH_CANCEL Message"}
 
-* Subscription ID: Subscription Identifier as defined in {{message-fetch}}.
+* Subscription ID: Subscriber-Chosen Subscription Identifier as defined in
+  {{message-fetch}}.
 
 ## TRACK_STATUS_REQUEST {#message-track-status-req}
 
@@ -2593,7 +2598,7 @@ will be dropped.
 
 ~~~
 OBJECT_DATAGRAM {
-  Subscription Identifier (i),
+  Subscription ID (i),
   Group ID (i),
   Object ID (i),
   Publisher Priority (8),
@@ -2614,7 +2619,7 @@ conveys an Object Status and has no payload.
 
 ~~~
 OBJECT_DATAGRAM_STATUS {
-  Subscription Identifier (i),
+  Subscription ID (i),
   Group ID (i),
   Object ID (i),
   Publisher Priority (8),
@@ -2625,7 +2630,7 @@ OBJECT_DATAGRAM_STATUS {
 ~~~
 {: #object-datagram-status-format title="MOQT OBJECT_DATAGRAM_STATUS"}
 
-* Subscription Identifier: the Subscriber or Publisher chosen Subscription
+* Subscription ID: the Subscriber or Publisher chosen Subscription
   Identifier indicating the subscription this Datagram belongs to.  If an
   endpoint receives a datagram with a Subscriber-Chosen Subscription
   Identifier that does not correspond to a subscription it initiated, it
@@ -2659,7 +2664,7 @@ Identifier` and the subgroup indicated by 'Group ID' and `Subgroup ID`.
 
 ~~~
 SUBGROUP_HEADER {
-  Subscription Identifier (i),
+  Subscription ID (i),
   Group ID (i),
   Subgroup ID (i),
   Publisher Priority (8),
@@ -2667,12 +2672,13 @@ SUBGROUP_HEADER {
 ~~~
 {: #object-header-format title="MOQT SUBGROUP_HEADER"}
 
-* Subscription Identifier: the Subscriber or Publisher chosen Subscription
+* Subscription ID: the Subscriber or Publisher chosen Subscription
   Identifier indicating the subscription this Subgroup belongs to. If an
-  endpoint receives a subgroup with an unknown Subscriber-Chosen Subscription
-  Identifier, it MUST close the connection with a Protocol Violation.  If it
-  receives a subgroup with an unknown Publisher-Chosen Subscription Identifier,
-  it MAY abandon the stream, or choose to buffer it for a brief period to handle
+  endpoint receives a subgroup with aSubscriber-Chosen Subscription
+  Identifier that does not correspond to a subscription it initiated, it MUST
+  close the connection with a Protocol Violation.  If it receives a subgroup
+  with an unknown Publisher-Chosen Subscription Identifier, it MAY
+  abandon the stream, or choose to buffer it for a brief period to handle
   reordering with the control message that establishes the PSID.  The endpoint
   SHOULD NOT release stream flow control beyond the SUBGROUP_HEADER until the
   PSID has been established.  TODO: talk about possible deadlocks.
