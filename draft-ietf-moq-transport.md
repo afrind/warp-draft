@@ -435,6 +435,28 @@ constrain the information in these fields, for example by restricting them to
 UTF-8. Any specification that does needs to specify the canonicalization into
 the bytes in the Track Namespace or Track Name such that exact comparison works.
 
+### Subscription Identifiers
+
+In order optimize wire efficiency, it is possible to refer to a track in MoQT
+by a numeric identifier in some messages, rather than the Full Track Name. When
+a subscriber makes a SUBSCRIBE or FETCH request for a track, it associates a
+Subscriber-Chosen Subscription ID (SSID) with the request. SSIDs are scoped to
+a single MoQT session.  They are even; they start at 0 and increase by 2 and
+have a maxmium value of 2^62-2.  The publisher limits the number of requests a
+subscriber can make using the MAX_SUBSCRIPTION_ID SETUP parameter or
+MAX_SUBSCRIPTION_ID control message.
+
+MoQT also allows the publisher to choose an identifier for each track, called
+the Publisher-Chosen Subscription ID (PSID). PSIDs are odd and have a maximum
+value of 2^61-1. The same identifier MUST NOT be assigned multiple tracks in the
+same session.  PSIDs are required when the publisher initiates the subscription
+(TODO: delete this; PUBLISH message is forthcoming) and are optional when the
+subscriber initiates it.
+
+When a publisher sends Subgroups or Datagrams, these can contain either a SSID
+or PSID, determined by the LSB of the identifier.
+
+
 ### Scope {#track-scope}
 
 A MOQT scope is a set of servers (as identified by their connection
@@ -450,6 +472,8 @@ Because the tuple of Track Namespace and Track Name are unique within an
 MOQT scope, they can be used as a cache key for the track.
 If, at a given moment in time, two tracks within the same scope contain
 different data, they MUST have different names and/or namespaces.
+
+
 
 # Sessions {#session}
 
@@ -571,7 +595,7 @@ code, as defined below:
 |------|---------------------------|
 | 0x3  | Protocol Violation        |
 |------|---------------------------|
-| 0x4  | Duplicate Track Alias     |
+| 0x4  | Duplicate Subscription ID |
 |------|---------------------------|
 | 0x5  | Parameter Length Mismatch |
 |------|---------------------------|
@@ -594,11 +618,11 @@ code, as defined below:
 * Protocol Violation: The remote endpoint performed an action that was
   disallowed by the specification.
 
-* Duplicate Track Alias: The endpoint attempted to use a Track Alias
-  that was already in use.
+* Duplicate Subscription ID: The endpoint attempted to use a Client or
+  Publisher chosen Subscription ID that was already in use.
 
 * Too Many Subscribes: The session was closed because the subscriber used
-  a Subscribe ID equal or larger than the current Maximum Subscribe ID.
+  a Subscription ID equal or larger than the current Maximum Subscription ID.
 
 * GOAWAY Timeout: The session was closed because the peer took too long to
   close the session in response to a GOAWAY ({{message-goaway}}) message.
@@ -952,12 +976,11 @@ When a relay receives an incoming ANNOUNCE for a given namespace, for
 each active upstream subscription that matches that namespace, it SHOULD send a
 SUBSCRIBE to the publisher that sent the ANNOUNCE.
 
-Object headers carry a short hop-by-hop `Track Alias` that maps to
-the Full Track Name (see {{message-subscribe-ok}}). Relays use the
-`Track Alias` of an incoming Object to identify its track and find
-the active subscribers for that track. Relays MUST forward Objects to
-matching subscribers in accordance to each subscription's priority, group order,
-and delivery timeout.
+Object headers carry a numeric identifier that maps to the Full Track Name
+(see {{message-subscribe-ok}}). Relays use the identifier in an incoming Object
+to identify its track and find the active subscribers for that track. Relays
+MUST forward Objects to matching subscribers in accordance to each
+subscription's priority, group order, and delivery timeout.
 
 If an upstream session is closed due to an unknown or invalid control message
 or Object, the relay MUST NOT continue to propagate that message or Object
@@ -1037,7 +1060,7 @@ MOQT Control Message {
 |-------|-----------------------------------------------------|
 | 0x10  | GOAWAY ({{message-goaway}})                         |
 |-------|-----------------------------------------------------|
-| 0x15  | MAX_SUBSCRIBE_ID ({{message-max-subscribe-id}})     |
+| 0x15  | MAX_SUBSCRIPTION_ID ({{message-max-subscribe-id}})     |
 |-------|-----------------------------------------------------|
 | 0x1A  | SUBSCRIBES_BLOCKED ({{message-subscribes-blocked}}) |
 |-------|-----------------------------------------------------|
@@ -1136,6 +1159,10 @@ Each version-specific parameter definition indicates the message types in which
 it can appear. If it appears in some other type of message, it MUST be ignored.
 Note that since Setup parameters use a separate namespace, it is impossible for
 these parameters to appear in Setup messages.
+
+### PUBLISHER CHOSEN SUBSCRIPTION ID
+
+Type (0x20).  See {{message-subscribe-ok}}.
 
 #### AUTHORIZATION INFO {#authorization-info}
 
@@ -1259,10 +1286,10 @@ client MUST set the PATH parameter to the `path-abempty` portion of the
 URI; if `query` is present, the client MUST concatenate `?`, followed by
 the `query` portion of the URI to the parameter.
 
-#### MAX_SUBSCRIBE_ID {#max-subscribe-id}
+#### MAX_SUBSCRIPTION_ID {#max-subscribe-id}
 
-The MAX_SUBSCRIBE_ID parameter (Parameter Type 0x02) communicates an initial
-value for the Maximum Subscribe ID to the receiving subscriber. The default
+The MAX_SUBSCRIPTION_ID parameter (Parameter Type 0x02) communicates an initial
+value for the Maximum Subscription ID to the receiving subscriber. The default
 value is 0, so if not specified, the peer MUST NOT create subscriptions.
 
 ## GOAWAY {#message-goaway}
@@ -1300,59 +1327,59 @@ GOAWAY Message {
   If a server receives a GOAWAY with a non-zero New Session URI Length it MUST
   terminate the session with a Protocol Violation.
 
-## MAX_SUBSCRIBE_ID {#message-max-subscribe-id}
+## MAX_SUBSCRIPTION_ID {#message-max-subscribe-id}
 
-A publisher sends a MAX_SUBSCRIBE_ID message to increase the number of
+A publisher sends a MAX_SUBSCRIPTION_ID message to increase the number of
 subscriptions a subscriber can create within a session.
 
-The Maximum Subscribe Id MUST only increase within a session, and
-receipt of a MAX_SUBSCRIBE_ID message with an equal or smaller Subscribe ID
+The Maximum Subscription ID MUST only increase within a session, and
+receipt of a MAX_SUBSCRIPTION_ID message with an equal or smaller Subscription ID
 value is a 'Protocol Violation'.
 
 ~~~
-MAX_SUBSCRIBE_ID
+MAX_SUBSCRIPTION_ID
 {
   Type (i) = 0x15,
   Length (i),
-  Subscribe ID (i),
+  Subscription ID (i),
 }
 ~~~
-{: #moq-transport-max-subscribe-id format title="MOQT MAX_SUBSCRIBE_ID Message"}
+{: #moq-transport-max-subscribe-id format title="MOQT MAX_SUBSCRIPTION_ID Message"}
 
-* Subscribe ID: The new Maximum Subscribe ID for the session. If a Subscribe ID
+* Subscription ID: The new Maximum Subscription ID for the session. If a Subscription ID
 {{message-subscribe-req}} equal or larger than this is received by the publisher
-that sent the MAX_SUBSCRIBE_ID, the publisher MUST close the session with an
+that sent the MAX_SUBSCRIPTION_ID, the publisher MUST close the session with an
 error of 'Too Many Subscribes'.
 
-MAX_SUBSCRIBE_ID is similar to MAX_STREAMS in ({{?RFC9000, Section 4.6}}),
-and similar considerations apply when deciding how often to send MAX_SUBSCRIBE_ID.
-For example, implementations might choose to increase MAX_SUBSCRIBE_ID as
+MAX_SUBSCRIPTION_ID is similar to MAX_STREAMS in ({{?RFC9000, Section 4.6}}),
+and similar considerations apply when deciding how often to send MAX_SUBSCRIPTION_ID.
+For example, implementations might choose to increase MAX_SUBSCRIPTION_ID as
 subscriptions close to keep the number of subscriptions available to subscribers
 roughly consistent.
 
 ## SUBSCRIBES_BLOCKED {#message-subscribes-blocked}
 
 The SUBSCRIBES_BLOCKED message is sent when a subscriber would like to begin
-a new subscription, but cannot because the Subscribe ID would exceed the
-Maximum Subscribe ID value sent by the peer.  The subscriber SHOULD send only
-one SUBSCRIBES_BLOCKED for a given Maximum Subscribe ID.
+a new subscription, but cannot because the Subscription ID would exceed the
+Maximum Subscription ID value sent by the peer.  The subscriber SHOULD send only
+one SUBSCRIBES_BLOCKED for a given Maximum Subscription ID.
 
-A publisher MAY send a MAX_SUBSCRIBE_ID upon receipt of SUBSCRIBES_BLOCKED,
+A publisher MAY send a MAX_SUBSCRIPTION_ID upon receipt of SUBSCRIBES_BLOCKED,
 but it MUST NOT rely on SUBSCRIBES_BLOCKED to trigger sending a
-MAX_SUBSCRIBE_ID, because sending SUBSCRIBES_BLOCKED is not required.
+MAX_SUBSCRIPTION_ID, because sending SUBSCRIBES_BLOCKED is not required.
 
 ~~~
 SUBSCRIBES_BLOCKED
 {
   Type (i) = 0x1A,
   Length (i),
-  Maximum Subscribe ID (i),
+  Maximum Subscription ID (i),
 }
 ~~~
 {: #moq-transport-subscribes-blocked format title="MOQT SUBSCRIBES_BLOCKED Message"}
 
-* Maximum Subscribe ID: The Maximum Subscribe ID for the session on which the subscriber
-is blocked. More on Subscribe ID in {{message-subscribe-req}}.
+* Maximum Subscription ID: The Maximum Subscription ID for the session on which the subscriber
+is blocked. More on Subscription ID in {{message-subscribe-req}}.
 
 ## SUBSCRIBE {#message-subscribe-req}
 
@@ -1397,8 +1424,7 @@ The format of SUBSCRIBE is as follows:
 SUBSCRIBE Message {
   Type (i) = 0x3,
   Length (i),
-  Subscribe ID (i),
-  Track Alias (i),
+  Subscription ID (i),
   Track Namespace (tuple),
   Track Name Length (i),
   Track Name (..),
@@ -1413,16 +1439,10 @@ SUBSCRIBE Message {
 ~~~
 {: #moq-transport-subscribe-format title="MOQT SUBSCRIBE Message"}
 
-* Subscribe ID: The subscriber specified identifier used to manage a
-subscription. `Subscribe ID` is a variable length integer that MUST be
-unique and monotonically increasing within a session and MUST be less
-than the session's Maximum Subscribe ID.
-
-* Track Alias: A session specific identifier for the track.
-Data streams and datagrams specify the Track Alias instead of the Track Name
-and Track Namespace to reduce overhead. If the Track Alias is already being used
-for a different track, the publisher MUST close the session with a Duplicate
-Track Alias error ({{session-termination}}).
+* Subscription ID: The subscriber specified identifier (SSID) used to manage
+ a subscription. `Subscription ID` is a variable length integer that MUST be
+ unique within a session and MUST be less than the session's Maximum
+ Subscription ID.
 
 * Track Namespace: Identifies the namespace of the track as defined in
 ({{track-name}}).
@@ -1467,7 +1487,7 @@ SUBSCRIBE_OK
 {
   Type (i) = 0x4,
   Length (i),
-  Subscribe ID (i),
+  Subscription ID (i),
   Expires (i),
   Group Order (8),
   ContentExists (8),
@@ -1478,7 +1498,7 @@ SUBSCRIBE_OK
 ~~~
 {: #moq-transport-subscribe-ok format title="MOQT SUBSCRIBE_OK Message"}
 
-* Subscribe ID: Subscription Identifier as defined in {{message-subscribe-req}}.
+* Subscription ID: Subscription Identifier as defined in {{message-subscribe-req}}.
 
 * Expires: Time in milliseconds after which the subscription is no
 longer valid. A value of 0 indicates that the subscription does not expire
@@ -1499,6 +1519,11 @@ session with a Protocol Violation ({{session-termination}}).
 
 * Subscribe Parameters: The parameters are defined in {{version-specific-params}}.
 
+PUBLISHER_CHOSEN_SUBSCRIPTION_ID: The Publisher-Chosen Subscription ID for
+this subscription (see {{subscription-identifiers}}).  If omitted, this
+subscription does not have a PSID and the publisher will only publish objects
+using the SSID.
+
 ## SUBSCRIBE_ERROR {#message-subscribe-error}
 
 A publisher sends a SUBSCRIBE_ERROR control message in response to a
@@ -1509,25 +1534,19 @@ SUBSCRIBE_ERROR
 {
   Type (i) = 0x5,
   Length (i),
-  Subscribe ID (i),
+  Subscription ID (i),
   Error Code (i),
   Reason Phrase Length (i),
   Reason Phrase (..),
-  Track Alias (i),
 }
 ~~~
 {: #moq-transport-subscribe-error format title="MOQT SUBSCRIBE_ERROR Message"}
 
-* Subscribe ID: Subscription Identifier as defined in {{message-subscribe-req}}.
+* Subscription ID: Subscription Identifier as defined in {{message-subscribe-req}}.
 
 * Error Code: Identifies an integer error code for subscription failure.
 
 * Reason Phrase: Provides the reason for subscription error.
-
-* Track Alias: When Error Code is 'Retry Track Alias', the subscriber SHOULD re-issue the
-  SUBSCRIBE with this Track Alias instead. If this Track Alias is already in use,
-  the subscriber MUST close the connection with a Duplicate Track Alias error
-  ({{session-termination}}).
 
 The application SHOULD use a relevant error code in SUBSCRIBE_ERROR,
 as defined below:
@@ -1547,8 +1566,6 @@ as defined below:
 |------|---------------------------|
 | 0x5  | Invalid Range             |
 |------|---------------------------|
-| 0x6  | Retry Track Alias         |
-|------|---------------------------|
 
 * Internal Error - An implementation specific or generic error occurred.
 
@@ -1566,9 +1583,6 @@ as defined below:
 * Invalid Range - The end of the SUBSCRIBE range is earlier than the beginning,
   or the end of the range has already been published.
 
-* Retry Track Alias - The publisher requires the subscriber to use the given
-  Track Alias when subscribing.
-
 
 ## SUBSCRIBE_UPDATE {#message-subscribe-update}
 
@@ -1582,7 +1596,7 @@ not have already sent Objects before the new start Object.  The end Group
 MUST NOT increase and when it decreases, there is no guarantee that a publisher
 will not have already sent Objects after the new end Object. A publisher SHOULD
 close the Session as a 'Protocol Violation' if the SUBSCRIBE_UPDATE violates
-either rule or if the subscriber specifies a Subscribe ID that has not existed
+either rule or if the subscriber specifies a Subscription ID that has not existed
 within the Session.
 
 There is no control message in response to a SUBSCRIBE_UPDATE, because it is
@@ -1604,7 +1618,7 @@ The format of SUBSCRIBE_UPDATE is as follows:
 SUBSCRIBE_UPDATE Message {
   Type (i) = 0x2,
   Length (i),
-  Subscribe ID (i),
+  Subscription ID (i),
   Start (Location),
   EndGroup (i),
   Subscriber Priority (8),
@@ -1614,8 +1628,8 @@ SUBSCRIBE_UPDATE Message {
 ~~~
 {: #moq-transport-subscribe-update-format title="MOQT SUBSCRIBE_UPDATE Message"}
 
-* Subscribe ID: The subscription identifier that is unique within the session.
-This MUST match an existing Subscribe ID.
+* Subscription ID: The subscription identifier that is unique within the session.
+This MUST match an existing Subscription ID.
 
 * Start: The starting location.
 
@@ -1640,12 +1654,12 @@ The format of `UNSUBSCRIBE` is as follows:
 UNSUBSCRIBE Message {
   Type (i) = 0xA,
   Length (i),
-  Subscribe ID (i)
+  Subscription ID (i)
 }
 ~~~
 {: #moq-transport-unsubscribe-format title="MOQT UNSUBSCRIBE Message"}
 
-* Subscribe ID: Subscription Identifier as defined in {{message-subscribe-req}}.
+* Subscription ID: Subscription Identifier as defined in {{message-subscribe-req}}.
 
 ## SUBSCRIBE_DONE {#message-subscribe-done}
 
@@ -1689,7 +1703,7 @@ The format of `SUBSCRIBE_DONE` is as follows:
 SUBSCRIBE_DONE Message {
   Type (i) = 0xB,
   Length (i),
-  Subscribe ID (i),
+  Subscription ID (i),
   Status Code (i),
   Stream Count (i),
   Reason Phrase Length (i),
@@ -1698,7 +1712,7 @@ SUBSCRIBE_DONE Message {
 ~~~
 {: #moq-transport-subscribe-fin-format title="MOQT SUBSCRIBE_DONE Message"}
 
-* Subscribe ID: Subscription identifier as defined in {{message-subscribe-req}}.
+* Subscription ID: Subscription identifier as defined in {{message-subscribe-req}}.
 
 * Status Code: An integer status code indicating why the subscription ended.
 
@@ -1771,7 +1785,7 @@ There are three types of Fetch messages:
 Standalone Fetch (0x1) : A Fetch of Objects performed independently of any Subscribe.
 
 Relative Joining Fetch (0x2) : A Fetch joined together with a Subscribe by specifying
-the Subscribe ID of an active subscription and a relative starting offset. A publisher
+the Subscription ID of an active subscription and a relative starting offset. A publisher
 receiving a Joining Fetch uses properties of the associated Subscribe to determine the
 Track Namespace, Track, StartGroup, StartObject, EndGroup, and EndObject such that
 it is contiguous with the associated Subscribe. The Joining Fetch begins the
@@ -1807,7 +1821,7 @@ The format of FETCH is as follows:
 FETCH Message {
   Type (i) = 0x16,
   Length (i),
-  Subscribe ID (i),
+  Subscription ID (i),
   Subscriber Priority (8),
   Group Order (8),
   Fetch Type (i),
@@ -1818,7 +1832,7 @@ FETCH Message {
    StartObject (i),
    EndGroup (i),
    EndObject (i),]
-  [ Subscribe ID (i),
+  [ Subscription ID (i),
     Joining Start (i),]
   Number of Parameters (i),
   Parameters (..) ...
@@ -1828,7 +1842,7 @@ FETCH Message {
 
 Fields common to all Fetch Types:
 
-* Subscribe ID: The Subscribe ID identifies a given fetch request. Subscribe ID
+* Subscription ID: The Subscription ID identifies a given fetch request. Subscription ID
 is a variable length integer that MUST be unique and monotonically increasing
 within a session.
 
@@ -1864,8 +1878,8 @@ requested.
 
 Fields present only for Relative Fetch (0x2) and Absolute Fetch (0x3):
 
-* Joining Subscribe ID: The Subscribe ID of the existing subscription to be
-joined. If a publisher receives a Joining Fetch with a Subscribe ID that does
+* Joining Subscription ID: The Subscription ID of the existing subscription to be
+joined. If a publisher receives a Joining Fetch with a Subscription ID that does
 not correspond to an existing Subscribe, it MUST respond with a Fetch Error.
 
 * Joining Start : for a Relative Joining Fetch (0x2), this value represents the
@@ -1927,7 +1941,7 @@ FETCH_OK
 {
   Type (i) = 0x18,
   Length (i),
-  Subscribe ID (i),
+  Subscription ID (i),
   Group Order (8),
   End Of Track (8),
   End (Location),
@@ -1937,7 +1951,7 @@ FETCH_OK
 ~~~
 {: #moq-transport-fetch-ok format title="MOQT FETCH_OK Message"}
 
-* Subscribe ID: Fetch Identifier as defined in {{message-fetch}}.
+* Subscription ID: Fetch Identifier as defined in {{message-fetch}}.
 
 * Group Order: Indicates the fetch will be delivered in
 Ascending (0x1) or Descending (0x2) order by group. See {{priorities}}.
@@ -1967,7 +1981,7 @@ FETCH_ERROR
 {
   Type (i) = 0x19,
   Length (i),
-  Subscribe ID (i),
+  Subscription ID (i),
   Error Code (i),
   Reason Phrase Length (i),
   Reason Phrase (..),
@@ -1975,7 +1989,7 @@ FETCH_ERROR
 ~~~
 {: #moq-transport-fetch-error format title="MOQT FETCH_ERROR Message"}
 
-* Subscribe ID: Subscription Identifier as defined in {{message-subscribe-req}}.
+* Subscription ID: Subscription Identifier as defined in {{message-subscribe-req}}.
 
 * Error Code: Identifies an integer error code for fetch failure.
 
@@ -2024,7 +2038,7 @@ as defined below:
 ## FETCH_CANCEL {#message-fetch-cancel}
 
 A subscriber issues a `FETCH_CANCEL` message to a publisher indicating it is no
-longer interested in receiving Objects for the fetch specified by 'Subscribe ID'.
+longer interested in receiving Objects for the fetch specified by 'Subscription ID'.
 The publisher SHOULD close the unidirectional stream as soon as possible.
 
 The format of `FETCH_CANCEL` is as follows:
@@ -2033,12 +2047,12 @@ The format of `FETCH_CANCEL` is as follows:
 FETCH_CANCEL Message {
   Type (i) = 0x17,
   Length (i),
-  Subscribe ID (i)
+  Subscription ID (i)
 }
 ~~~
 {: #moq-transport-fetch-cancel title="MOQT FETCH_CANCEL Message"}
 
-* Subscribe ID: Subscription Identifier as defined in {{message-fetch}}.
+* Subscription ID: Subscription Identifier as defined in {{message-fetch}}.
 
 ## TRACK_STATUS_REQUEST {#message-track-status-req}
 
@@ -2566,7 +2580,7 @@ will be dropped.
 
 ~~~
 OBJECT_DATAGRAM {
-  Track Alias (i),
+  Subscription Identifier (i),
   Group ID (i),
   Object ID (i),
   Publisher Priority (8),
@@ -2587,7 +2601,7 @@ conveys an Object Status and has no payload.
 
 ~~~
 OBJECT_DATAGRAM_STATUS {
-  Track Alias (i),
+  Subscription Identifier (i),
   Group ID (i),
   Object ID (i),
   Publisher Priority (8),
@@ -2597,6 +2611,15 @@ OBJECT_DATAGRAM_STATUS {
 }
 ~~~
 {: #object-datagram-status-format title="MOQT OBJECT_DATAGRAM_STATUS"}
+
+* Subscription Identifier: the Subscriber or Publisher chosen Subscription
+  Identifier indicating the subscription this Datagram belongs to.  If an
+  endpoint receives a datagram with an unknown Subscriber-Chosen Subscription
+  Identifier, it MUST close the connection with a Protocol Violation.  If it
+  receives a datagram with an unknown Publisher-Chosen Subscription
+  Identifier, it MAY drop the datagram or choose to buffer it for a brief
+  period to handle reordering with the control message that establishes the
+  PSID.
 
 ## Streams
 
@@ -2618,12 +2641,12 @@ effect on outstanding subscriptions.
 ### Subgroup Header
 
 When a stream begins with `SUBGROUP_HEADER`, all Objects on the stream
-belong to the track requested in the Subscribe message identified by `Track Alias`
-and the subgroup indicated by 'Group ID' and `Subgroup ID`.
+belong to the track requested in the subscription identified by `Subscription
+Identifier` and the subgroup indicated by 'Group ID' and `Subgroup ID`.
 
 ~~~
 SUBGROUP_HEADER {
-  Track Alias (i),
+  Subscription Identifier (i),
   Group ID (i),
   Subgroup ID (i),
   Publisher Priority (8),
@@ -2631,6 +2654,16 @@ SUBGROUP_HEADER {
 ~~~
 {: #object-header-format title="MOQT SUBGROUP_HEADER"}
 
+* Subscription Identifier: the Subscriber or Publisher chosen Subscription
+  Identifier indicating the subscription this Subgroup belongs to. If an
+  endpoint receives a subgroup with an unknown Subscriber-Chosen Subscription
+  Identifier, it MUST close the connection with a Protocol Violation.  If it
+  receives a subgroup with an unknown Publisher-Chosen Subscription Identifier,
+  it MAY abandon the stream, or choose to buffer it for a brief period to handle
+  reordering with the control message that establishes the PSID.  The endpoint
+  SHOULD NOT release stream flow control beyond the SUBGROUP_HEADER until the
+  PSID has been established.  TODO: talk about possible deadlocks.
+  
 All Objects received on a stream opened with `SUBGROUP_HEADER` have an
 `Object Forwarding Preference` = `Subgroup`.
 
@@ -2730,11 +2763,11 @@ Subgroups in a Group at once.
 ### Fetch Header {#fetch-header}
 
 When a stream begins with `FETCH_HEADER`, all objects on the stream belong to the
-track requested in the Fetch message identified by `Subscribe ID`.
+track requested in the Fetch message identified by `Subscription ID`.
 
 ~~~
 FETCH_HEADER {
-  Subscribe ID (i),
+  Subscription ID (i),
 }
 ~~~
 {: #fetch-header-format title="MOQT FETCH_HEADER"}
@@ -2770,7 +2803,7 @@ Sending a subgroup on one stream:
 Stream = 2
 
 SUBGROUP_HEADER {
-  Track Alias = 2
+  Subscription ID = 2
   Group ID = 0
   Subgroup ID = 0
   Publisher Priority = 0
@@ -2796,8 +2829,7 @@ Extension Headers.
 Stream = 2
 
 STREAM_HEADER_GROUP {
-  Subscribe ID = 2
-  Track Alias = 2
+  Subscription ID = 2
   Group ID = 0
   Publisher Priority = 0
 }
