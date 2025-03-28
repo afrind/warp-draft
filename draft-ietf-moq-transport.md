@@ -976,6 +976,15 @@ When a relay receives an incoming ANNOUNCE for a given namespace, for
 each active upstream subscription that matches that namespace, it SHOULD send a
 SUBSCRIBE to the publisher that sent the ANNOUNCE.
 
+If a relay receives a Publisher-Chosen Subscription ID in SUBSCRIBE_OK, it
+SHOULD assign this ID to downstream subscriptions for the same track. Since
+relays can aggregate tracks from uncoordinated publishers, it is not always
+possible to reuse the upstream PSID.  If there is no upstream
+Publisher-Chosen Subscription ID, or if the upstream PSID is already in use
+downstream for a different track, the relay SHOULD NOT set a 
+Publisher-Chosen Subscription ID, and use the Subscriber-Chosen
+Subscription ID instead.
+
 Object headers carry a numeric identifier that maps to the Full Track Name
 (see {{message-subscribe-ok}}). Relays use the identifier in an incoming Object
 to identify its track and find the active subscribers for that track. Relays
