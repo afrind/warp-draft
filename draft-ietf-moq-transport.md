@@ -453,8 +453,9 @@ same session.  PSIDs are required when the publisher initiates the subscription
 (TODO: delete this; PUBLISH message is forthcoming) and are optional when the
 subscriber initiates it.
 
-When a publisher sends Subgroups or Datagrams, these can contain either a SSID
-or PSID, determined by the LSB of the identifier.
+When a publisher sends Subgroups or Datagrams, these can contain either a
+Subscriber-Chosen or Publisher-Chosen Subscription ID, determined by the LSB of
+the identifier.
 
 
 ### Scope {#track-scope}
@@ -472,8 +473,6 @@ Because the tuple of Track Namespace and Track Name are unique within an
 MOQT scope, they can be used as a cache key for the track.
 If, at a given moment in time, two tracks within the same scope contain
 different data, they MUST have different names and/or namespaces.
-
-
 
 # Sessions {#session}
 
@@ -1069,9 +1068,9 @@ MOQT Control Message {
 |-------|-----------------------------------------------------|
 | 0x10  | GOAWAY ({{message-goaway}})                         |
 |-------|-----------------------------------------------------|
-| 0x15  | MAX_SUBSCRIPTION_ID ({{message-max-subscribe-id}})     |
+| 0x15  | MAX_SUBSCRIPTION_ID ({{message-max-subscribe-id}})  |
 |-------|-----------------------------------------------------|
-| 0x1A  | SUBSCRIBES_BLOCKED ({{message-subscribes-blocked}}) |
+| 0x1A  | SUBSCRIPTIONS_BLOCKED ({{message-subscribes-blocked}}) |
 |-------|-----------------------------------------------------|
 | 0x3   | SUBSCRIBE ({{message-subscribe-req}})               |
 |-------|-----------------------------------------------------|
@@ -1341,9 +1340,9 @@ GOAWAY Message {
 A publisher sends a MAX_SUBSCRIPTION_ID message to increase the number of
 subscriptions a subscriber can create within a session.
 
-The Maximum Subscription ID MUST only increase within a session, and
-receipt of a MAX_SUBSCRIPTION_ID message with an equal or smaller Subscription ID
-value is a 'Protocol Violation'.
+The Maximum Subscription ID MUST only increase within a session, and receipt of
+a MAX_SUBSCRIPTION_ID message with an equal or smaller Subscription ID value is
+a 'Protocol Violation'.
 
 ~~~
 MAX_SUBSCRIPTION_ID
@@ -1355,37 +1354,38 @@ MAX_SUBSCRIPTION_ID
 ~~~
 {: #moq-transport-max-subscribe-id format title="MOQT MAX_SUBSCRIPTION_ID Message"}
 
-* Subscription ID: The new Maximum Subscription ID for the session. If a Subscription ID
-{{message-subscribe-req}} equal or larger than this is received by the publisher
-that sent the MAX_SUBSCRIPTION_ID, the publisher MUST close the session with an
-error of 'Too Many Subscribes'.
+* Subscription ID: The new Maximum Subscription ID for the session. If a
+  Subscription ID {{message-subscribe-req}} equal or larger than this is
+  received by the publisher that sent the MAX_SUBSCRIPTION_ID, the publisher
+  MUST close the session with an error of 'Too Many Subscribes'.
 
 MAX_SUBSCRIPTION_ID is similar to MAX_STREAMS in ({{?RFC9000, Section 4.6}}),
-and similar considerations apply when deciding how often to send MAX_SUBSCRIPTION_ID.
-For example, implementations might choose to increase MAX_SUBSCRIPTION_ID as
-subscriptions close to keep the number of subscriptions available to subscribers
-roughly consistent.
+and similar considerations apply when deciding how often to send
+MAX_SUBSCRIPTION_ID. For example, implementations might choose to increase
+MAX_SUBSCRIPTION_ID as subscriptions close to keep the number of subscriptions
+available to subscribers roughly consistent.
 
-## SUBSCRIBES_BLOCKED {#message-subscribes-blocked}
+## SUBSCRIPTIONS_BLOCKED {#message-subscribes-blocked}
 
-The SUBSCRIBES_BLOCKED message is sent when a subscriber would like to begin
+The SUBSCRIPTIONS_BLOCKED message is sent when a subscriber would like to begin
 a new subscription, but cannot because the Subscription ID would exceed the
 Maximum Subscription ID value sent by the peer.  The subscriber SHOULD send only
-one SUBSCRIBES_BLOCKED for a given Maximum Subscription ID.
+one SUBSCRIPTIONS_BLOCKED for a given Maximum Subscription ID.
 
-A publisher MAY send a MAX_SUBSCRIPTION_ID upon receipt of SUBSCRIBES_BLOCKED,
-but it MUST NOT rely on SUBSCRIBES_BLOCKED to trigger sending a
-MAX_SUBSCRIPTION_ID, because sending SUBSCRIBES_BLOCKED is not required.
+A publisher MAY send a MAX_SUBSCRIPTION_ID upon receipt of
+SUBSCRIPTIONS_BLOCKED, but it MUST NOT rely on SUBSCRIPTIONS_BLOCKED to trigger
+sending a MAX_SUBSCRIPTION_ID, because sending SUBSCRIPTIONS_BLOCKED is not
+required.
 
 ~~~
-SUBSCRIBES_BLOCKED
+SUBSCRIPTIONS_BLOCKED
 {
   Type (i) = 0x1A,
   Length (i),
   Maximum Subscription ID (i),
 }
 ~~~
-{: #moq-transport-subscribes-blocked format title="MOQT SUBSCRIBES_BLOCKED Message"}
+{: #moq-transport-subscribes-blocked format title="MOQT SUBSCRIPTIONS_BLOCKED Message"}
 
 * Maximum Subscription ID: The Maximum Subscription ID for the session on which the subscriber
 is blocked. More on Subscription ID in {{message-subscribe-req}}.
@@ -1448,10 +1448,8 @@ SUBSCRIBE Message {
 ~~~
 {: #moq-transport-subscribe-format title="MOQT SUBSCRIBE Message"}
 
-* Subscription ID: The subscriber specified identifier (SSID) used to manage
- a subscription. `Subscription ID` is a variable length integer that MUST be
- unique within a session and MUST be less than the session's Maximum
- Subscription ID.
+* Subscription ID: The Subscriber-Chosen Subscription ID for this
+  subsbscription. See {{subscription-identifiers}}.
 
 * Track Namespace: Identifies the namespace of the track as defined in
 ({{track-name}}).
@@ -1507,7 +1505,8 @@ SUBSCRIBE_OK
 ~~~
 {: #moq-transport-subscribe-ok format title="MOQT SUBSCRIBE_OK Message"}
 
-* Subscription ID: Subscription Identifier as defined in {{message-subscribe-req}}.
+* Subscription ID: Subscription Identifier as defined in
+  {{message-subscribe-req}}.
 
 * Expires: Time in milliseconds after which the subscription is no
 longer valid. A value of 0 indicates that the subscription does not expire
@@ -1551,7 +1550,8 @@ SUBSCRIBE_ERROR
 ~~~
 {: #moq-transport-subscribe-error format title="MOQT SUBSCRIBE_ERROR Message"}
 
-* Subscription ID: Subscription Identifier as defined in {{message-subscribe-req}}.
+* Subscription ID: Subscription Identifier as defined in
+  {{message-subscribe-req}}.
 
 * Error Code: Identifies an integer error code for subscription failure.
 
@@ -1605,8 +1605,8 @@ not have already sent Objects before the new start Object.  The end Group
 MUST NOT increase and when it decreases, there is no guarantee that a publisher
 will not have already sent Objects after the new end Object. A publisher SHOULD
 close the Session as a 'Protocol Violation' if the SUBSCRIBE_UPDATE violates
-either rule or if the subscriber specifies a Subscription ID that has not existed
-within the Session.
+either rule or if the subscriber specifies a Subscription ID that has not
+existed within the Session.
 
 There is no control message in response to a SUBSCRIBE_UPDATE, because it is
 expected that it will always succeed and the worst outcome is that it is not
@@ -1637,8 +1637,10 @@ SUBSCRIBE_UPDATE Message {
 ~~~
 {: #moq-transport-subscribe-update-format title="MOQT SUBSCRIBE_UPDATE Message"}
 
-* Subscription ID: The subscription identifier that is unique within the session.
-This MUST match an existing Subscription ID.
+* Subscription ID: Either a Subscriber-Chosen or Publisher-Chosen Subscription
+  Identifier for the subscription to update. If an endpoint receives a
+  SUBSCRIBE_UPDATE with an ID that does not refer to an active subscription,
+  it MUST ignore the message.
 
 * Start: The starting location.
 
@@ -1668,7 +1670,8 @@ UNSUBSCRIBE Message {
 ~~~
 {: #moq-transport-unsubscribe-format title="MOQT UNSUBSCRIBE Message"}
 
-* Subscription ID: Subscription Identifier as defined in {{message-subscribe-req}}.
+* Subscription ID: Either a Subscriber-Chosen or Publisher-Chosen Subscription
+  Identifier.
 
 ## SUBSCRIBE_DONE {#message-subscribe-done}
 
@@ -1721,7 +1724,9 @@ SUBSCRIBE_DONE Message {
 ~~~
 {: #moq-transport-subscribe-fin-format title="MOQT SUBSCRIBE_DONE Message"}
 
-* Subscription ID: Subscription identifier as defined in {{message-subscribe-req}}.
+* Subscription ID: Either a Subscriber-Chosen or Publisher-Chosen Subscription
+  identifier.  If an endpoint receives a SUBSCRIBE_DONE with an unknown
+  Subscription ID, it MUST close thes session with a Protocol Violation.
 
 * Status Code: An integer status code indicating why the subscription ended.
 
@@ -1851,9 +1856,8 @@ FETCH Message {
 
 Fields common to all Fetch Types:
 
-* Subscription ID: The Subscription ID identifies a given fetch request. Subscription ID
-is a variable length integer that MUST be unique and monotonically increasing
-within a session.
+* Subscription ID: The Subscriber-Chosen Subscription ID for this fetch request.
+  See {{subscription-identifiers}}.
 
 * Subscriber Priority: Specifies the priority of a fetch request relative to
 other subscriptions or fetches in the same session. Lower numbers get higher
@@ -1998,7 +2002,7 @@ FETCH_ERROR
 ~~~
 {: #moq-transport-fetch-error format title="MOQT FETCH_ERROR Message"}
 
-* Subscription ID: Subscription Identifier as defined in {{message-subscribe-req}}.
+* Subscription ID: Subscription Identifier as defined in {{message-fetch}}.
 
 * Error Code: Identifies an integer error code for fetch failure.
 
@@ -2623,12 +2627,12 @@ OBJECT_DATAGRAM_STATUS {
 
 * Subscription Identifier: the Subscriber or Publisher chosen Subscription
   Identifier indicating the subscription this Datagram belongs to.  If an
-  endpoint receives a datagram with an unknown Subscriber-Chosen Subscription
-  Identifier, it MUST close the connection with a Protocol Violation.  If it
-  receives a datagram with an unknown Publisher-Chosen Subscription
-  Identifier, it MAY drop the datagram or choose to buffer it for a brief
-  period to handle reordering with the control message that establishes the
-  PSID.
+  endpoint receives a datagram with a Subscriber-Chosen Subscription
+  Identifier that does not correspond to a subscription it initiated, it
+  MAY close the session with a Protocol Violation.  If it receives a
+  datagram with an unknown Publisher-Chosen Subscription Identifier, it
+  MAY drop the datagram or choose to buffer it for a brief period to
+  handle reordering with the control message that establishes the PSID.
 
 ## Streams
 
