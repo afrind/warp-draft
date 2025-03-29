@@ -474,6 +474,42 @@ MOQT scope, they can be used as a cache key for the track.
 If, at a given moment in time, two tracks within the same scope contain
 different data, they MUST have different names and/or namespaces.
 
+### Subscriptions
+
+NOTE: This is the beginning of replacing ANNOUNCE and SUBSCSRIBE_ANNOUNCES
+with a new verb, PUBLISH, while adding pub-before-sub.
+
+There are two kinds of subscriptions in MoQT - a subscription to a track
+and a subscription to a track namespace.  Subscriptions to a track receive
+objects published on that track.  Subscriptions to a namespace recieve
+subscriptions to tracks within that namespace.
+
+A subscription can be initiated by either a publisher or a subscriber.
+A publisher initiates a subscription to either a track or track
+namespace by sending the PUBLISH message.  The subscriber either accepts
+or rejects the subscription using PUBLISH_OK or PUBLISH_ERROR.  A
+subscriber initiates a subscription to either a track or a track
+namespace by sending the SUBSCRIBE message.  The publisher either
+accepts or rejects the subscription using SUBSCRIBE_OK or SUBSCRIBE_ERROR.
+Once either of these subscription initations is complete, the subscription
+can be updated by the subscriber using SUBSCRIBE_UPDATE, terminated by the
+subscriber using UNSUBSCRIBE, or terminated by the publisher using
+SUBSCRIBE_DONE.
+
+All subscriptions have a Forwarding State which is either 0 or 1.  If the
+Forwarding State is 0, the publisher does not send objects or PUBLISHes
+for the subscription.  If the Forwarding State is 1, the publisher sends
+objects or PUBLISHes.  The initiator of the subscription sets the initial
+Forwarding State in either PUBLISH or SUBSCRIBE.  The sender of PUBLISH_OK
+or SUBSCRIBE_OK updates the Forwarding State based on its preference.  Once
+established, the subscriber can change the Forwarding State by sending
+SUBSCRIBE_UPDATE.
+
+Either endpoint can initiate a subscription to a track or namespace without
+exhanging any prior messages other than SETUP.  Relays however do not send
+any PUBLISH messages without first receiving a SUBSCRIBE to a relevant track
+or namespace.
+
 # Sessions {#session}
 
 ## Session establishment {#session-establishment}
@@ -657,8 +693,8 @@ subscribers prior to any UNSUBSCRIBE messages to upstream publishers.
 After the client receives a GOAWAY, it's RECOMMENDED that the client waits until
 there are no more active subscriptions before closing the session with NO_ERROR.
 Ideally this is transparent to the application using MOQT, which involves
-establishing a new session in the background and migrating active subscriptions
-and announcements. The client can choose to delay closing the session if it
+establishing a new session in the background and migrating active subscriptions.
+The client can choose to delay closing the session if it
 expects more OBJECTs to be delivered. The server closes the session with a
 'GOAWAY Timeout' if the client doesn't close the session quickly enough.
 
@@ -704,72 +740,74 @@ done in the context of an established MoQT session.
 
 Given sufficient out of band information, it is valid for a subscriber
 to send a SUBSCRIBE or FETCH message to a publisher (including a relay) without
-any previous MoQT messages besides SETUP. However, SUBSCRIBE_ANNOUNCES and
-ANNOUNCE messages provide an in-band means of discovery of publishers for a
+any previous MoQT messages besides SETUP. However, the PUBLISH and
+SUBSCRIBE messages provide an in-band means of discovery of publishers for a
 namespace or track.
 
 The syntax of these messages is described in {{message}}.
 
 
-## Subscribing to Announcements
+## Subscribing to Publishes
 
 If the subscriber is aware of a namespace of interest, it can send
-SUBSCRIBE_ANNOUNCES to publishers/relays it has established a session with. The
-recipient of this message will send any relevant ANNOUNCE or UNANNOUNCE messages
-for that namespace, or more specific part of that namespace.
+SUBSCRIBE with that namespace and Forwarding Mode=1 to 
+publishers/relays it has established a session with. The recipient
+of this message will send any relevant PUBLISH messages for that namespace,
+or more specific part of that namespace.
 
-A publisher MUST send exactly one SUBSCRIBE_ANNOUNCES_OK or
-SUBSCRIBE_ANNOUNCES_ERROR in response to a SUBSCRIBE_ANNOUNCES. The subscriber
+A publisher MUST send exactly one SUBSCRIBE_OK or
+SUBSCRIBE_ERROR in response to this SUBSCRIBE. The subscriber
 SHOULD close the session with a protocol error if it detects receiving more than
 one.
 
-The receiver of a SUBSCRIBE_ANNOUNCES_OK or SUBSCRIBE_ANNOUNCES_ERROR ought to
+The receiver of a SUBSCRIBE_OK or SUBSCRIBE_ERROR ought to
 forward the result to the application, so the application can decide which other
 publishers to contact, if any.
 
-An UNSUBSCRIBE_ANNOUNCES withdraws a previous SUBSCRIBE_ANNOUNCES. It does
-not prohibit the receiver (publisher) from sending further ANNOUNCE messages.
+An UNSUBSCRIBE withdraws a previous SUBSCRIBE. It does
+not prohibit the receiver (publisher) from sending further PUBLISH messages.
 
-## Announcements
+## Publishes
 
-A publisher MAY send ANNOUNCE messages to any subscriber. An ANNOUNCE indicates
+A publisher MAY send PUBLISH messages to any subscriber. A PUBLISH indicates
 to the subscriber that the publisher has a single track available, or one or 
 more tracks available in a namespace. A subscriber MAY send SUBSCRIBE or FETCH
-for a track without having received an ANNOUNCE for it.
+for a track without having received an PUBLISH for it.
 
 If a publisher is authoritative for a given track or namespace, or is a relay that has
-received an authorized ANNOUNCE for that namespace from an upstream publisher,
-it MUST send an ANNOUNCE to any subscriber that has subscribed to ANNOUNCE for
+received an authorized PUBLISH for that namespace from an upstream publisher,
+it MUST send a PUBLISH to any subscriber that has subscribed to
 that namespace, or a more generic set including that namespace. A publisher MAY
-send the ANNOUNCE to any other subscriber.
+send the PUBLISH to any other subscriber, but a relay MUST NOT send a PUBLISH
+without an authorized SUBSCRIBE first.
 
-An endpoint SHOULD NOT, however, send an ANNOUNCE advertising a namespace or track
-that exactly matches a namespace for which the peer sent an earlier ANNOUNCE
-(i.e. an ANNOUNCE ought not to be echoed back to its sender).
+An endpoint SHOULD NOT, however, send a PUBLISH advertising a namespace or track
+that exactly matches a namespace for which the peer sent an earlier PUBLISH
+(i.e. a PUBLISH ought not to be echoed back to its sender).
 
-The receiver of an ANNOUNCE_OK or ANNOUNCE_ERROR SHOULD report this to the
+The receiver of an PUBLISH_OK or PUBLISH_ERROR SHOULD report this to the
 application. A subscriber MUST send exactly
-one ANNOUNCE_OK or ANNOUNCE_ERROR in response to an ANNOUNCE. The publisher
+one PUBLISH_OK or PUBLISH_ERROR in response to a PUBLISH. The publisher
 SHOULD close the session with a protocol error if it receives more than one.
 
-An UNANNOUNCE message withdraws a previous ANNOUNCE, although it is not a
-protocol error for the subscriber to send a SUBSCRIBE or FETCH message after
-receiving an UNANNOUNCE.
+A SUBSCRIBE_DONE message terminates a PUBLISH of a track or of a namespace.
 
-A subscriber can send ANNOUNCE_CANCEL to revoke acceptance of an ANNOUNCE, for
+A subscriber can send UNSUBSCRIBE to revoke acceptance of a PUBLISH, for
 example due to expiration of authorization credentials. The message enables the
-publisher to ANNOUNCE again with refreshed authorization, or discard associated
-state. After receiving an ANNOUNCE_CANCEL, the publisher does not send UNANNOUNCE.
+publisher to PUBLISH again with refreshed authorization, or discard associated
+state. After receiving an UNSUBSCRIBE, the publisher does not send SUBSCRIBE_DONE.
 
-While ANNOUNCE indicates to relays how to connect publishers and subscribers, it
+While PUBLISH indicates to relays how to connect publishers and subscribers, it
 is not a full-fledged routing protocol and does not protect against loops and
-other phenomena. In particular, ANNOUNCE SHOULD NOT be used to find paths through
+other phenomena. In particular, PUBLISH SHOULD NOT be used to find paths through
 richly connected networks of relays.
 
 A subscriber MAY send a SUBSCRIBE or FETCH for a track to any publisher. If it
-has accepted an ANNOUNCE for that track, or with a namespace that exactly matches
-the namespace for that track, it SHOULD only request it from the senders of those
-ANNOUNCE messages.
+has an established namespace SUBSCRIPTION with Forward Mode=1, however, it SHOULD
+wait for PUBLISH messages from the publisher.  If it has an established namespace
+subscription with a namespace that exactly matches the namespace of a track which
+has Forward Mode=0, it SHOULD only request it from the senders of those
+PUBLISH messages.
 
 
 # Priorities {#priorities}
@@ -936,37 +974,38 @@ to the old relay can be stopped with an UNSUBSCRIBE.
 
 ## Publisher Interactions
 
-Publishing through the relay starts with publisher sending ANNOUNCE
+Publishing through the relay starts with publisher sending PUBLISH
 control message with a `Track Namespace` ({{model-track}}) and optional
 `Track Name`.
-The ANNOUNCE enables the relay to know which publisher to forward a
-SUBSCRIBE to.
+The PUBLISH enables the relay to know which publisher is publishing this
+track or track namespace.
 
 Relays MUST verify that publishers are authorized to publish
 the content associated with the set of
-tracks whose Track Namespace or Track Name matches the ANNOUNCE. Where the
+tracks whose Track Namespace or Track Name matches the PUBLISH. Where the
 authorization and identification of the publisher occurs depends on the way the
 relay is managed and is application specific.
 
-A Relay can receive announcements from multiple publishers for the same
-Track Namespace and it SHOULD respond with the same response to each of the
-publishers, as though it was responding to an ANNOUNCE from a single publisher.
+A Relay can receive PUBLISH messages from multiple publishers for the same
+Track Namespace or Track and it SHOULD respond with the same response to each of the
+publishers, as though it was responding to an PUBLISH from a single publisher.
 
-When a publisher wants to stop new subscriptions for an announced namespace or
-track, it sends an UNANNOUNCE. A subscriber indicates it will no longer subscribe
-to tracks matching a ANNOUNCE message it previously responded ANNOUNCE_OK to by
-sending an ANNOUNCE_CANCEL.
+When a publisher wants to terminate an established namespace or
+track subscription, it sends SUBSCRIBE_DONE. A subscriber indicates it will no
+longer subscribe to tracks matching a namespace PUBLISH message it previously
+responded PUBLISH_OK to by sending an UNSUBSCRIBE.
 
 A relay manages sessions from multiple publishers and subscribers,
 connecting them based on the track namespace or full track name. This MUST use
 an exact match on track namespace unless otherwise negotiated by the application.
-For example, a SUBSCRIBE namespace=foobar message will be forwarded to
-the session that sent ANNOUNCE namespace=foobar.
+For example, a SUBSCRIBE namespace=foobar, track=y message will be forwarded to
+the session that sent PUBLISH namespace=foobar.
 
 When a relay receives an incoming SUBSCRIBE request that triggers an
 upstream subscription, it SHOULD send a SUBSCRIBE request to each
-publisher that has announced the subscription's namespace or full track name,
-unless it already has an active subscription for the Objects requested by the
+publisher that has a namespace subscription. If the relay has established
+subscriptions for the track or namespace in Forward Mode=0, it sends a
+SUBSCRIBE_UPDATE with Forward Mode=1.  Unless it already has an active subscription for the Objects requested by the
 incoming SUBSCRIBE request from all available publishers.
 
 When a relay receives an incoming ANNOUNCE for a given namespace or track, for
