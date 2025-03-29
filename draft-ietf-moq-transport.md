@@ -437,14 +437,13 @@ the bytes in the Track Namespace or Track Name such that exact comparison works.
 
 ### Subscription Identifiers
 
-In order optimize wire efficiency, it is possible to refer to a track in MoQT
-by a numeric identifier in some messages, rather than the Full Track Name. When
-a subscriber makes a SUBSCRIBE or FETCH request for a track, it associates a
-Subscriber-Chosen Subscription ID (SSID) with the request. SSIDs are scoped to
-a single MoQT session.  They are even; they start at 0 and increase by 2 and
-have a maxmium value of 2^62-2.  The publisher limits the number of requests a
-subscriber can make using the MAX_SUBSCRIPTION_ID SETUP parameter or
-MAX_SUBSCRIPTION_ID control message.
+To optimize wire efficiency, some MoQT messages refer to a track by a numeric
+identifier, rather than the Full Track Name. When a subscriber makes a SUBSCRIBE
+or FETCH request for a track, it associates a Subscriber-Chosen Subscription ID
+(SSID) with the request. SSIDs are scoped to a single MoQT session.  They are
+even; they start at 0 and increase by 2 and have a maxmium value of 2^62-2.  The
+publisher limits the number of requests a subscriber can make using the
+MAX_SUBSCRIPTION_ID SETUP parameter or MAX_SUBSCRIPTION_ID control message.
 
 MoQT also allows the publisher to choose an identifier for each track, called
 the Publisher-Chosen Subscription ID (PSID). PSIDs are odd and have a maximum
@@ -598,7 +597,7 @@ code, as defined below:
 |------|---------------------------|
 | 0x5  | Parameter Length Mismatch |
 |------|---------------------------|
-| 0x6  | Too Many Subscribes       |
+| 0x6  | Too Many Subscriptions    |
 |------|---------------------------|
 | 0x10 | GOAWAY Timeout            |
 |------|---------------------------|
@@ -620,8 +619,9 @@ code, as defined below:
 * Duplicate Subscription ID: The endpoint attempted to use a Client or
   Publisher chosen Subscription ID that was already in use.
 
-* Too Many Subscribes: The session was closed because the subscriber used
-  a Subscription ID equal or larger than the current Maximum Subscription ID.
+* Too Many Subscriptions: The session was closed because the subscriber used a
+  Subscription ID equal or larger than the current Maximum Subscriber-Chosen
+  Subscription ID.
 
 * GOAWAY Timeout: The session was closed because the peer took too long to
   close the session in response to a GOAWAY ({{message-goaway}}) message.
@@ -978,18 +978,16 @@ SUBSCRIBE to the publisher that sent the ANNOUNCE.
 If a relay receives a Publisher-Chosen Subscription ID in SUBSCRIBE_OK, it
 SHOULD assign this ID to downstream subscriptions for the same track. Since
 subscribers can request tracks from uncoordinated publishers through a single
-relay session, it is not always
-possible to reuse the upstream PSID.  If there is no upstream
-Publisher-Chosen Subscription ID, or if the upstream PSID is already in use
-downstream for a different track, the relay SHOULD NOT set a
-Publisher-Chosen Subscription ID, and use the Subscriber-Chosen
-Subscription ID instead.
+relay session, it is not always possible to reuse the upstream PSID.  If there
+is no upstream Publisher-Chosen Subscription ID, or if the upstream PSID is
+already in use downstream for a different track, the relay SHOULD NOT set a
+Publisher-Chosen Subscription ID, and use the Subscriber-Chosen Subscription ID
+instead.
 
-Object headers carry a numeric identifier that maps to the Full Track Name
-(see {{message-subscribe-ok}}). Relays use the identifier in an incoming Object
-to identify its track and find the active subscribers for that track. Relays
-MUST forward Objects to matching subscribers in accordance to each
-subscription's priority, group order, and delivery timeout.
+Relays use the identifier in an incoming Subgroup or Datagram to identify its
+subscription and find the active subscribers. Relays MUST forward Objects to
+matching subscribers in accordance to each subscription's priority, group order,
+and delivery timeout.
 
 If an upstream session is closed due to an unknown or invalid control message
 or Object, the relay MUST NOT continue to propagate that message or Object
@@ -1171,7 +1169,8 @@ these parameters to appear in Setup messages.
 
 ### PUBLISHER CHOSEN SUBSCRIPTION ID
 
-Type (0x20).  See {{message-subscribe-ok}}.
+Type (0x20).  See {{message-subscribe-ok}}.  It is a Protocol Violation if it
+appears in any other message.
 
 #### AUTHORIZATION INFO {#authorization-info}
 
@@ -1298,8 +1297,9 @@ the `query` portion of the URI to the parameter.
 #### MAX_SUBSCRIPTION_ID {#max-subscribe-id}
 
 The MAX_SUBSCRIPTION_ID parameter (Parameter Type 0x02) communicates an initial
-value for the Maximum Subscription ID to the receiving subscriber. The default
-value is 0, so if not specified, the peer MUST NOT create subscriptions.
+value for the Maximum Subscriber-Chosen Subscription ID to the receiving
+subscriber. The default value is 0, so if not specified, the peer MUST NOT
+create subscriptions.
 
 ## GOAWAY {#message-goaway}
 
@@ -1341,9 +1341,9 @@ GOAWAY Message {
 A publisher sends a MAX_SUBSCRIPTION_ID message to increase the number of
 subscriptions a subscriber can create within a session.
 
-The Maximum Subscription ID MUST only increase within a session, and receipt of
-a MAX_SUBSCRIPTION_ID message with an equal or smaller Subscription ID value is
-a 'Protocol Violation'.
+The Maximum Subscriber-Chosen Subscription ID MUST only increase within a
+session, and receipt of a MAX_SUBSCRIPTION_ID message with an equal or smaller
+Subscription ID value is a 'Protocol Violation'.
 
 ~~~
 MAX_SUBSCRIPTION_ID
@@ -1355,10 +1355,10 @@ MAX_SUBSCRIPTION_ID
 ~~~
 {: #moq-transport-max-subscribe-id format title="MOQT MAX_SUBSCRIPTION_ID Message"}
 
-* Subscription ID: The new Maximum Subscription ID for the session. If a
-  Subscription ID {{message-subscribe-req}} equal or larger than this is
-  received by the publisher that sent the MAX_SUBSCRIPTION_ID, the publisher
-  MUST close the session with an error of 'Too Many Subscribes'.
+* Subscription ID: The new Maximum Subscriber-Chosen Subscription ID for the
+  session. If a Subscription ID {{message-subscribe-req}} equal or larger than
+  this is received by the publisher that sent the MAX_SUBSCRIPTION_ID, the
+  publisher MUST close the session with an error of 'Too Many Subscriptions'.
 
 MAX_SUBSCRIPTION_ID is similar to MAX_STREAMS in ({{?RFC9000, Section 4.6}}),
 and similar considerations apply when deciding how often to send
@@ -1370,8 +1370,9 @@ available to subscribers roughly consistent.
 
 The SUBSCRIPTIONS_BLOCKED message is sent when a subscriber would like to begin
 a new subscription, but cannot because the Subscription ID would exceed the
-Maximum Subscription ID value sent by the peer.  The subscriber SHOULD send only
-one SUBSCRIPTIONS_BLOCKED for a given Maximum Subscription ID.
+Maximum Subscriber-Chosen Subscription ID value sent by the peer.  The
+subscriber SHOULD send only one SUBSCRIPTIONS_BLOCKED for a given Maximum
+Subscription ID.
 
 A publisher MAY send a MAX_SUBSCRIPTION_ID upon receipt of
 SUBSCRIPTIONS_BLOCKED, but it MUST NOT rely on SUBSCRIPTIONS_BLOCKED to trigger
@@ -1389,8 +1390,8 @@ SUBSCRIPTIONS_BLOCKED
 {: #moq-transport-subscribes-blocked format title="MOQT SUBSCRIPTIONS_BLOCKED Message"}
 
 * Maximum Subscription ID: The Maximum Subscriber-Chosen Subscription ID for the
-session on which the subscriber
-is blocked. More on Subscription ID in {{message-subscribe-req}}.
+session on which the subscriber is blocked. More on Subscription ID in
+{{message-subscribe-req}}.
 
 ## SUBSCRIBE {#message-subscribe-req}
 
@@ -2682,7 +2683,7 @@ SUBGROUP_HEADER {
   reordering with the control message that establishes the PSID.  The endpoint
   SHOULD NOT release stream flow control beyond the SUBGROUP_HEADER until the
   PSID has been established.  TODO: talk about possible deadlocks.
-  
+
 All Objects received on a stream opened with `SUBGROUP_HEADER` have an
 `Object Forwarding Preference` = `Subgroup`.
 
